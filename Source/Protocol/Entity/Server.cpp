@@ -1,6 +1,3 @@
 #include "Server.h"
 
-namespace MCP
-{
-
-}
+namespace MCP {}

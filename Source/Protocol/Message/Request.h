@@ -2,77 +2,60 @@
 // 为保证较好的跨平台特性，MCP命名空间的代码均使用标准c++编码
 // 非必要情况下，禁止使用特定系统平台API
 
-#include <string>
-#include <json/json.h>
 #include "BasicMessage.h"
+#include <json/json.h>
+#include <string>
 
-namespace MCP
-{
-	struct Request : public MCP::Message
-	{
-	public:
-		Request(MessageType eMsgType, bool bNeedIdentity)
-			: Message(eMsgType, MessageCategory_Request, bNeedIdentity)
-		{
+namespace MCP {
+struct Request : public MCP::Message {
+public:
+  Request(MessageType eMsgType, bool bNeedIdentity)
+    : Message(eMsgType, MessageCategory_Request, bNeedIdentity) {}
 
-		}
+  MCP::RequestId requestId;
+  std::string strMethod;
+  MCP::ProgressToken progressToken;
 
-		MCP::RequestId requestId;
-		std::string strMethod;
-		MCP::ProgressToken progressToken;
+  bool IsValid() const override;
+  int DoSerialize(Json::Value& jMsg) const override;
+  int DoDeserialize(const Json::Value& jMsg) override;
+};
 
-		bool IsValid() const override;
-		int DoSerialize(Json::Value& jMsg) const override;
-		int DoDeserialize(const Json::Value& jMsg) override;
-	};
+struct InitializeRequest : public MCP::Request {
+public:
+  InitializeRequest(bool bNeedIdentity)
+    : Request(MessageType_InitializeRequest, bNeedIdentity) {}
 
-	struct InitializeRequest : public MCP::Request
-	{
-	public:
-		InitializeRequest(bool bNeedIdentity)
-			: Request(MessageType_InitializeRequest, bNeedIdentity)
-		{
+  std::string strProtocolVer;
+  Implementation clientInfo;
 
-		}
+  bool IsValid() const override;
+  int DoSerialize(Json::Value& jMsg) const override;
+  int DoDeserialize(const Json::Value& jMsg) override;
+};
 
-		std::string strProtocolVer;
-		Implementation clientInfo;
+struct ListToolsRequest : public MCP::Request {
+public:
+  ListToolsRequest(bool bNeedIdentity)
+    : Request(MessageType_ListToolsRequest, bNeedIdentity) {}
 
-		bool IsValid() const override;
-		int DoSerialize(Json::Value& jMsg) const override;
-		int DoDeserialize(const Json::Value& jMsg) override;
-	};
+  std::string strCursor;
 
-	struct ListToolsRequest : public MCP::Request
-	{
-	public:
-		ListToolsRequest(bool bNeedIdentity)
-			: Request(MessageType_ListToolsRequest, bNeedIdentity)
-		{
+  bool IsValid() const override;
+  int DoSerialize(Json::Value& jMsg) const override;
+  int DoDeserialize(const Json::Value& jMsg) override;
+};
 
-		}
+struct CallToolRequest : public MCP::Request {
+public:
+  CallToolRequest(bool bNeedIdentity)
+    : Request(MessageType_CallToolRequest, bNeedIdentity) {}
 
-		std::string strCursor;
+  std::string strName;
+  Json::Value jArguments;
 
-		bool IsValid() const override;
-		int DoSerialize(Json::Value& jMsg) const override;
-		int DoDeserialize(const Json::Value& jMsg) override;
-	};
-
-	struct CallToolRequest : public MCP::Request
-	{
-	public:
-		CallToolRequest(bool bNeedIdentity)
-			: Request(MessageType_CallToolRequest, bNeedIdentity)
-		{
-
-		}
-
-		std::string strName;
-		Json::Value jArguments;
-
-		bool IsValid() const override;
-		int DoSerialize(Json::Value& jMsg) const override;
-		int DoDeserialize(const Json::Value& jMsg) override;
-	};
-}
+  bool IsValid() const override;
+  int DoSerialize(Json::Value& jMsg) const override;
+  int DoDeserialize(const Json::Value& jMsg) override;
+};
+}  // namespace MCP
