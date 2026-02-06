@@ -3,7 +3,10 @@
 #include <thread>
 #include <atomic>
 #include <signal.h>
+#include <memory>
 #include "EchoServer.h"
+#include "Session/Session.h"
+#include "Transport/Transport.h"
 
 
 int LaunchEchoServer()
@@ -27,7 +30,16 @@ int LaunchEchoServer()
 
 
 std::atomic_bool g_bStop{ false };
-void signal_handler(int signal) { g_bStop = true; }
+
+void signal_handler(int signal) {
+  g_bStop = true;
+  
+  // 直接通过基类指针调用虚函数，无需类型转换
+  auto spTransport = MCP::CMCPSession::GetInstance().GetTransport();
+  if (spTransport) {
+    spTransport->Stop();
+  }
+}
 
 int main(int argc, char* argv[])
 {
