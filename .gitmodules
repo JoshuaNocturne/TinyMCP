@@ -1,3 +1,6 @@
 [submodule "Source/External/jsoncpp"]
 	path = Source/External/jsoncpp
 	url = https://github.com/open-source-parsers/jsoncpp.git
+[submodule "Source/External/cpp-httplib"]
+	path = Source/External/cpp-httplib
+	url = https://github.com/yhirose/cpp-httplib.git
