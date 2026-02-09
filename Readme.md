@@ -1,5 +1,7 @@
 ﻿# TinyMCP
 
+> **Note**: This repository is forked from [https://github.com/Qihoo360/TinyMCP](https://github.com/Qihoo360/TinyMCP)
+
 ## What is TinyMCP?
 TinyMCP is a lightweight C++ SDK for implementing the MCP Server.
 
