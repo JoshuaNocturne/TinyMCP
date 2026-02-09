@@ -5,9 +5,6 @@
 namespace Implementation {
 
 int CEchoServer::Initialize() {
-  MCP::CMCPSession::GetInstance().SetTransport(
-    std::make_shared<MCP::CHttpTransport>());
-
   // 1. Set the basic information of the Server.
   MCP::Implementation serverInfo;
   serverInfo.strName = Implementation::CEchoServer::SERVER_NAME;
@@ -38,6 +35,18 @@ int CEchoServer::Initialize() {
   if (!spCallToolsTask)
     return MCP::ERRNO_INTERNAL_ERROR;
   RegisterToolsTasks(Implementation::CEchoTask::TOOL_NAME, spCallToolsTask);
+
+  // 5. Set the transport type before calling Initialize()
+  switch (m_transportType) {
+  case TransportType::kStdio:
+    SetTransport(std::make_shared<MCP::CStdioTransport>());
+    break;
+  case TransportType::kHttp:
+    SetTransport(std::make_shared<MCP::CHttpTransport>(m_httpHost, m_httpPort));
+    break;
+  default:
+    return MCP::ERRNO_INTERNAL_ERROR;
+  }
 
   return MCP::ERRNO_OK;
 }
