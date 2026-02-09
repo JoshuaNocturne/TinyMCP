@@ -1,6 +1,4 @@
 #pragma once
-// 为保证较好的跨平台特性，MCP命名空间的代码均使用标准c++编码
-// 非必要情况下，禁止使用特定系统平台API
 
 #include "../Public/PublicDef.h"
 #include <atomic>
@@ -23,9 +21,9 @@ public:
 
   MessageCategory eMessageCategory{ MessageCategory_Unknown };
   MessageType eMessageType{ MessageType_Unknown };
-  bool bExist{ true };  // 可选时对象是否存在
-  unsigned long long ullTimestamp{ 0 };  // 毫秒级时间戳
-  unsigned long ulRuntimeId{ 0 };  // 运行时id
+  bool bExist{ true };  // 驴脡脩隆脢卤露脭脧贸脢脟路帽麓忙脭脷
+  unsigned long long ullTimestamp{ 0 };  // 潞脕脙毛录露脢卤录盲麓脕
+  unsigned long ulRuntimeId{ 0 };  // 脭脣脨脨脢卤id
   static std::atomic_ulong s_ulIdBase;
 
   int Serialize(std::string& str) const {

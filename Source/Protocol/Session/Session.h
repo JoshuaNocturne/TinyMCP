@@ -1,6 +1,4 @@
 #pragma once
-// 为保证较好的跨平台特性，MCP命名空间的代码均使用标准c++编码
-// 非必要情况下，禁止使用特定系统平台API
 
 #include "../Message/BasicMessage.h"
 #include "../Message/Request.h"
@@ -70,7 +68,7 @@ private:
     int iErrCode, const std::shared_ptr<MCP::Message>& spMsg);
   int SwitchState(SessionState eState);
 
-  // 异步任务
+  // 脪矛虏陆脠脦脦帽
   int CommitAsyncTask(const std::shared_ptr<MCP::CMCPTask>& spTask);
   int CancelAsyncTask(const MCP::RequestId& requestId);
   int StartAsyncTaskThread();
@@ -93,7 +91,7 @@ private:
   std::unordered_map<std::string, std::shared_ptr<MCP::ProcessCallToolRequest>>
     m_hashCallToolsTasks;
 
-  // 异步任务
+  // 脪矛虏陆脠脦脦帽
   std::unique_ptr<std::thread> m_upTaskThread;
   std::atomic_bool m_bRunAsyncTask{ true };
   std::mutex m_mtxAsyncThread;

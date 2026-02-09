@@ -1,6 +1,4 @@
 #pragma once
-// 为保证较好的跨平台特性，MCP命名空间的代码均使用标准c++编码
-// 非必要情况下，禁止使用特定系统平台API
 
 #include "../Public/PublicDef.h"
 #include "../Session/Session.h"
@@ -8,6 +6,7 @@
 #include <memory>
 
 namespace MCP {
+
 template <class T>
 class CMCPServer {
 public:
@@ -73,6 +72,14 @@ public:
     return ERRNO_OK;
   }
 
+  int RequestStop() {
+    auto spTransport = MCP::CMCPSession::GetInstance().GetTransport();
+    if (spTransport) {
+      spTransport->Stop();
+    }
+    return ERRNO_OK;
+  }
+
 protected:
   CMCPServer() = default;
   ~CMCPServer() = default;
@@ -81,4 +88,6 @@ protected:
   std::unordered_map<std::string, std::shared_ptr<MCP::ProcessCallToolRequest>>
     m_hashCallToolsTasks;
 };
+
 }  // namespace MCP
+

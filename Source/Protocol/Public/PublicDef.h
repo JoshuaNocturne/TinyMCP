@@ -1,6 +1,4 @@
 #pragma once
-// 为保证较好的跨平台特性，MCP命名空间的代码均使用标准c++编码
-// 非必要情况下，禁止使用特定系统平台API
 
 #include <chrono>
 #include <json/json.h>
@@ -71,7 +69,7 @@ static constexpr const char* ERROR_MESSAGE_METHOD_NOT_FOUND =
 static constexpr const char* ERROR_MESSAGE_INVALID_PARAMS = u8"invalid params";
 static constexpr const char* ERROR_MESSAGE_INTERNAL_ERROR = u8"internal error";
 
-// json rpc 2.0标准错误码
+// json rpc 2.0卤锚脳录麓铆脦贸脗毛
 static constexpr const int ERRNO_OK = 0;
 static constexpr const int ERRNO_PARSE_ERROR = -32700;
 static constexpr const int ERRNO_INVALID_REQUEST = -32600;
@@ -79,7 +77,7 @@ static constexpr const int ERRNO_METHOD_NOT_FOUND = -32601;
 static constexpr const int ERRNO_INVALID_PARAMS = -32602;
 static constexpr const int ERRNO_INTERNAL_ERROR = -32603;
 
-// server自定义错误码
+// server脳脭露篓脪氓麓铆脦贸脗毛
 static constexpr const int ERRNO_SERVER_ERROR_FIRST = -32000;
 static constexpr const int ERRNO_INVALID_RESPONSE = -32001;
 static constexpr const int ERRNO_INVALID_NOTIFICATION = -32002;

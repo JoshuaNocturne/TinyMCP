@@ -1,6 +1,4 @@
 #pragma once
-// 为保证较好的跨平台特性，MCP命名空间的代码均使用标准c++编码
-// 非必要情况下，禁止使用特定系统平台API
 
 #include "../Message/Message.h"
 #include <memory>

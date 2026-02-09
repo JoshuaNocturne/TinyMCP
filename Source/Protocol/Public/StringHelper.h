@@ -11,7 +11,7 @@ inline std::wstring utf8_string_to_wstring(const std::string& str) {
     std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
     return converter.from_bytes(str);
   } catch (const std::exception& e) {
-    // Èç¹û×ª»»Ê§°Ü£¬·µ»Ø¿Õ×Ö·û´®
+    // å¦‚æœè½¬æ¢å¤±è´¥ï¼Œè¿”å›ç©ºå­—ç¬¦ä¸²
     return L"";
   }
 }
@@ -21,7 +21,7 @@ inline std::string wstring_to_utf8_string(const std::wstring& strW) {
     std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
     return converter.to_bytes(strW);
   } catch (const std::exception& e) {
-    // Èç¹û×ª»»Ê§°Ü£¬·µ»Ø¿Õ×Ö·û´®
+    // å¦‚æœè½¬æ¢å¤±è´¥ï¼Œè¿”å›ç©ºå­—ç¬¦ä¸²
     return "";
   }
 }
