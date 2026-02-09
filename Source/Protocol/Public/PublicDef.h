@@ -48,6 +48,7 @@ static constexpr const char* MSG_KEY_TOTAL = "total";
 static constexpr const char* MSG_KEY_REQUEST_ID = "requestId";
 
 static constexpr const char* METHOD_INITIALIZE = "initialize";
+static constexpr const char* METHOD_PING = "ping";
 static constexpr const char* METHOD_NOTIFICATION_INITIALIZED =
   "notifications/initialized";
 static constexpr const char* METHOD_NOTIFICATION_CANCELLED =
@@ -107,6 +108,8 @@ enum MessageType {
   MessageType_InitializeRequest,
   MessageType_InitializeResult,
   MessageType_InitializedNotification,
+  MessageType_PingRequest,
+  MessageType_PingResult,
   MessageType_ServerCapabilities,
   MessageType_Prompts,
   MessageType_Resources,

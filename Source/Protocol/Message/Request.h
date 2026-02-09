@@ -32,6 +32,12 @@ public:
   int DoDeserialize(const Json::Value& jMsg) override;
 };
 
+struct PingRequest : public MCP::Request {
+public:
+  PingRequest(bool bNeedIdentity)
+    : Request(MessageType_PingRequest, bNeedIdentity) {}
+};
+
 struct ListToolsRequest : public MCP::Request {
 public:
   ListToolsRequest(bool bNeedIdentity)

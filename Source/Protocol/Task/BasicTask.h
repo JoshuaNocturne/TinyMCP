@@ -49,6 +49,15 @@ public:
   int Execute() override;
 };
 
+class ProcessPingRequest : public ProcessRequest {
+public:
+  ProcessPingRequest(const std::shared_ptr<MCP::Request>& spRequest)
+    : ProcessRequest(spRequest) {}
+
+  std::shared_ptr<CMCPTask> Clone() const override;
+  int Execute() override;
+};
+
 class ProcessListToolsRequest : public ProcessRequest {
 public:
   ProcessListToolsRequest(const std::shared_ptr<MCP::Request>& spRequest)

@@ -94,6 +94,20 @@ int InitializeResult::DoSerialize(Json::Value& jMsg) const {
   return ERRNO_OK;
 }
 
+int PingResult::DoSerialize(Json::Value& jMsg) const {
+  if (!IsValid())
+    return ERRNO_INVALID_RESPONSE;
+
+  Json::Value jResult(Json::objectValue);
+
+  int iErrCode = Response::DoSerialize(jMsg);
+  if (ERRNO_OK != iErrCode)
+    return iErrCode;
+  jMsg[MSG_KEY_RESULT] = jResult;
+
+  return ERRNO_OK;
+}
+
 int InitializeResult::DoDeserialize(const Json::Value& jMsg) {
   return Response::DoDeserialize(jMsg);
 }

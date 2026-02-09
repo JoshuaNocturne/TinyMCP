@@ -129,6 +129,18 @@ int CMCPSession::ProcessRequest(
     iErrCode = SwitchState(SessionState_Initializing);
 
   } break;
+  case MessageType_PingRequest: {
+    auto spTask = std::make_shared<ProcessPingRequest>(spRequest);
+    if (!spTask) {
+      iErrCode = ERRNO_INTERNAL_ERROR;
+      goto PROC_END;
+    }
+    iErrCode = spTask->Execute();
+    if (ERRNO_OK != iErrCode) {
+      goto PROC_END;
+    }
+    break;
+  }
   case MessageType_ListToolsRequest: {
     if (CMCPSession::SessionState_Initialized !=
         CMCPSession::GetInstance().GetSessionState()) {
@@ -313,6 +325,18 @@ int CMCPSession::ParseRequest(
       return ERRNO_INVALID_REQUEST;
 
     spMsg = spInitializeRequest;
+
+    return ERRNO_OK;
+  } else if (spRequest->strMethod.compare(METHOD_PING) == 0) {
+    auto spPingRequest = std::make_shared<MCP::PingRequest>(true);
+    if (!spPingRequest)
+      return ERRNO_PARSE_ERROR;
+
+    iErrCode = spPingRequest->Deserialize(strMsg);
+    if (ERRNO_OK != iErrCode)
+      return ERRNO_INVALID_REQUEST;
+
+    spMsg = spPingRequest;
 
     return ERRNO_OK;
   } else if (spRequest->strMethod.compare(METHOD_TOOLS_LIST) == 0) {

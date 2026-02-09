@@ -43,6 +43,14 @@ public:
   int DoDeserialize(const Json::Value& jMsg) override;
 };
 
+struct PingResult : public MCP::Response {
+public:
+  PingResult(bool bNeedIdentity)
+    : Response(MessageType_PingResult, bNeedIdentity) {}
+
+  int DoSerialize(Json::Value& jMsg) const override;
+};
+
 struct ListToolsResult : public MCP::Response {
 public:
   ListToolsResult(bool bNeedIdentity)

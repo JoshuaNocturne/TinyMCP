@@ -127,6 +127,33 @@ int ProcessInitializeRequest::Execute() {
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
+// ProcessPingRequest
+std::shared_ptr<CMCPTask> ProcessPingRequest::Clone() const {
+  return nullptr;
+}
+
+int ProcessPingRequest::Execute() {
+  if (!IsValid())
+    return ERRNO_INTERNAL_ERROR;
+
+  auto spPingResult = std::make_shared<PingResult>(true);
+  if (!spPingResult)
+    return ERRNO_INTERNAL_ERROR;
+  spPingResult->requestId = m_spRequest->requestId;
+
+  std::string strResponse;
+  if (ERRNO_OK != spPingResult->Serialize(strResponse))
+    return ERRNO_INTERNAL_ERROR;
+  auto spTransport = CMCPSession::GetInstance().GetTransport();
+  if (!spTransport)
+    return ERRNO_INTERNAL_ERROR;
+  if (ERRNO_OK != spTransport->Write(strResponse))
+    return ERRNO_INTERNAL_ERROR;
+
+  return ERRNO_OK;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////
 // ProcessListToolsRequest
 std::shared_ptr<CMCPTask> ProcessListToolsRequest::Clone() const {
   return nullptr;

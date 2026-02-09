@@ -48,7 +48,7 @@ Please check the [wiki](https://github.com/Qihoo360/TinyMCP/wiki) for more infor
 | Tools | Tools enable models to interact with external systems, such as querying databases, calling APIs, or performing computations. | Yes |
 | Pagination | Pagination allows servers to yield results in smaller chunks rather than all at once. | Yes |
 | Transports | HTTP with Server-Sent Events (SSE) | Not yet |
-| Ping | Ping mechanism that allows either party to verify that their counterpart is still responsive and the connection is alive. | Not yet |
+| Ping | Ping mechanism that allows either party to verify that their counterpart is still responsive and the connection is alive. | Yes |
 | Resources | Resources allow servers to share data that provides context to language models, such as files, database schemas, or application-specific information. | Not yet |
 | Prompts | Prompts allow servers to provide structured messages and instructions for interacting with language models. | Not yet |
 | Completion | A standardized way for servers to offer argument autocompletion suggestions for prompts and resource URIs. | Not yet |
