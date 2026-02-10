@@ -20,7 +20,8 @@ MCP is an open protocol that standardizes how applications provide context to LL
 Please check the [wiki](https://github.com/Qihoo360/TinyMCP/wiki) for more information.
 
 ## Dependencies
-[jsoncpp 1.9.5](https://github.com/open-source-parsers/jsoncpp)
+[jsoncpp](https://github.com/open-source-parsers/jsoncpp)
+[httplib](https://github.com/yhirose/cpp-httplib)
 
 ## MCP protocol version
 [MCP Specification 2024-11-05](https://modelcontextprotocol.io/specification/2024-11-05/index)

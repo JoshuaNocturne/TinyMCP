@@ -3,6 +3,7 @@
 #include "../Message/Notification.h"
 #include "../Message/Request.h"
 #include "../Message/Response.h"
+#include "../Public/Logger.h"
 #include "../Public/PublicDef.h"
 #include "../Task/BasicTask.h"
 
@@ -18,20 +19,31 @@ CMCPSession& CMCPSession::GetInstance() {
 }
 
 int CMCPSession::Ready() {
-  if (!m_spTransport)
+  LOG_INFO("Session ready started");
+
+  if (!m_spTransport) {
+    LOG_ERROR("Transport not set");
     return ERRNO_INTERNAL_ERROR;
+  }
 
   int iErrCode = ERRNO_OK;
   iErrCode = m_spTransport->Connect();
-  if (ERRNO_OK != iErrCode)
+  if (ERRNO_OK != iErrCode) {
+    LOG_ERROR("Transport connection failed, error: {}", iErrCode);
     return iErrCode;
+  }
 
+  LOG_INFO("Session ready completed");
   return iErrCode;
 }
 
 int CMCPSession::Run() {
-  if (!m_spTransport)
+  LOG_INFO("Session message loop started");
+
+  if (!m_spTransport) {
+    LOG_ERROR("Transport not set");
     return ERRNO_INTERNAL_ERROR;
+  }
 
   int iErrCode = ERRNO_OK;
 
@@ -43,33 +55,45 @@ int CMCPSession::Run() {
       iErrCode = ParseMessage(strIncomingMsg, spMsg);
       iErrCode = ProcessMessage(iErrCode, spMsg);
     } else {
+      LOG_WARNING("Message loop exiting, error: {}", iErrCode);
       break;
     }
   }
 
+  LOG_INFO("Session message loop ended");
   return iErrCode;
 }
 
 int CMCPSession::Terminate() {
-  StopAsyncTaskThread();
-  if (m_upTaskThread && m_upTaskThread->joinable())
-    m_upTaskThread->join();
+  LOG_INFO("Session terminating");
 
-  if (!m_spTransport)
+  StopAsyncTaskThread();
+  if (m_upTaskThread && m_upTaskThread->joinable()) {
+    m_upTaskThread->join();
+  }
+
+  if (!m_spTransport) {
+    LOG_ERROR("Transport not set");
     return ERRNO_INTERNAL_ERROR;
+  }
 
   int iErrCode = ERRNO_OK;
   iErrCode = m_spTransport->Disconnect();
-  if (ERRNO_OK != iErrCode)
+  if (ERRNO_OK != iErrCode) {
+    LOG_ERROR("Transport disconnection failed, error: {}", iErrCode);
     return iErrCode;
+  }
 
+  LOG_INFO("Session terminated");
   return iErrCode;
 }
 
 int CMCPSession::ProcessMessage(
   int iErrCode, const std::shared_ptr<MCP::Message>& spMsg) {
-  if (!spMsg || !spMsg->IsValid())
+  if (!spMsg || !spMsg->IsValid()) {
+    LOG_ERROR("Invalid message");
     return ERRNO_INTERNAL_ERROR;
+  }
 
   switch (spMsg->eMessageCategory) {
   case MessageCategory_Request: {
@@ -82,6 +106,8 @@ int CMCPSession::ProcessMessage(
     return ProcessNotification(iErrCode, spMsg);
   } break;
   default:
+    LOG_ERROR("Unknown message category: {}",
+      static_cast<int>(spMsg->eMessageCategory));
     break;
   }
 
@@ -97,20 +123,25 @@ int CMCPSession::ProcessRequest(
     goto PROC_END;
   }
   if (!spMsg || !spMsg->IsValid()) {
+    LOG_ERROR("Invalid request message");
     iErrCode = ERRNO_INTERNAL_ERROR;
     goto PROC_END;
   }
   spRequest = std::dynamic_pointer_cast<MCP::Request>(spMsg);
   if (!spRequest) {
+    LOG_ERROR("Cannot cast to Request type");
     iErrCode = ERRNO_INTERNAL_ERROR;
     goto PROC_END;
   }
   m_hashMessage[MessageCategory_Request].push_back(spMsg);
 
+  LOG_INFO("Processing request: {}", spRequest->strMethod);
+
   switch (spRequest->eMessageType) {
   case MessageType_InitializeRequest: {
     if (CMCPSession::SessionState_Original !=
         CMCPSession::GetInstance().GetSessionState()) {
+      LOG_ERROR("InitializeRequest in invalid state");
       strMessage = ERROR_MESSAGE_INVALID_REQUEST;
       iErrCode = ERRNO_INVALID_REQUEST;
       goto PROC_END;
@@ -118,11 +149,13 @@ int CMCPSession::ProcessRequest(
 
     auto spTask = std::make_shared<ProcessInitializeRequest>(spRequest);
     if (!spTask) {
+      LOG_ERROR("Failed to create InitializeRequest task");
       iErrCode = ERRNO_INTERNAL_ERROR;
       goto PROC_END;
     }
     iErrCode = spTask->Execute();
     if (ERRNO_OK != iErrCode) {
+      LOG_ERROR("InitializeRequest failed, error: {}", iErrCode);
       goto PROC_END;
     }
 
@@ -132,11 +165,13 @@ int CMCPSession::ProcessRequest(
   case MessageType_PingRequest: {
     auto spTask = std::make_shared<ProcessPingRequest>(spRequest);
     if (!spTask) {
+      LOG_ERROR("Failed to create PingRequest task");
       iErrCode = ERRNO_INTERNAL_ERROR;
       goto PROC_END;
     }
     iErrCode = spTask->Execute();
     if (ERRNO_OK != iErrCode) {
+      LOG_ERROR("PingRequest failed, error: {}", iErrCode);
       goto PROC_END;
     }
     break;
@@ -144,6 +179,7 @@ int CMCPSession::ProcessRequest(
   case MessageType_ListToolsRequest: {
     if (CMCPSession::SessionState_Initialized !=
         CMCPSession::GetInstance().GetSessionState()) {
+      LOG_ERROR("ListToolsRequest in invalid state");
       strMessage = ERROR_MESSAGE_INVALID_REQUEST;
       iErrCode = ERRNO_INVALID_REQUEST;
       goto PROC_END;
@@ -151,16 +187,21 @@ int CMCPSession::ProcessRequest(
 
     auto spTask = std::make_shared<ProcessListToolsRequest>(spRequest);
     if (!spTask) {
+      LOG_ERROR("Failed to create ListToolsRequest task");
       iErrCode = ERRNO_INTERNAL_ERROR;
       goto PROC_END;
     }
 
     iErrCode = spTask->Execute();
+    if (ERRNO_OK != iErrCode) {
+      LOG_ERROR("ListToolsRequest failed, error: {}", iErrCode);
+    }
 
   } break;
   case MessageType_CallToolRequest: {
     if (CMCPSession::SessionState_Initialized !=
         CMCPSession::GetInstance().GetSessionState()) {
+      LOG_ERROR("CallToolRequest in invalid state");
       iErrCode = ERRNO_INVALID_REQUEST;
       goto PROC_END;
     }
@@ -168,30 +209,40 @@ int CMCPSession::ProcessRequest(
     auto spCallToolRequest =
       std::dynamic_pointer_cast<MCP::CallToolRequest>(spRequest);
     if (!spCallToolRequest) {
+      LOG_ERROR("Cannot cast to CallToolRequest");
       iErrCode = ERRNO_INTERNAL_ERROR;
       goto PROC_END;
     }
+
+    LOG_INFO("Calling tool: {}", spCallToolRequest->strName);
+
     auto spProcessCallToolRequest =
       CMCPSession::GetInstance().GetServerCallToolsTask(
         spCallToolRequest->strName);
     if (!spProcessCallToolRequest) {
+      LOG_ERROR("Tool not found: {}", spCallToolRequest->strName);
       strMessage = ERROR_MESSAGE_INVALID_PARAMS;
       iErrCode = ERRNO_INVALID_PARAMS;
       goto PROC_END;
     }
     auto spNewTask = spProcessCallToolRequest->Clone();
     if (!spNewTask) {
+      LOG_ERROR("Failed to clone task");
       iErrCode = ERRNO_INTERNAL_ERROR;
       goto PROC_END;
     }
     auto spNewProcessCallToolRequest =
       std::dynamic_pointer_cast<MCP::ProcessCallToolRequest>(spNewTask);
     if (!spNewProcessCallToolRequest) {
+      LOG_ERROR("Cannot cast to ProcessCallToolRequest");
       iErrCode = ERRNO_INTERNAL_ERROR;
       goto PROC_END;
     }
     spNewProcessCallToolRequest->SetRequest(spRequest);
     iErrCode = CommitAsyncTask(spNewProcessCallToolRequest);
+    if (ERRNO_OK != iErrCode) {
+      LOG_ERROR("Failed to commit async task, error: {}", iErrCode);
+    }
 
   } break;
   default:
@@ -212,11 +263,15 @@ PROC_END: {
 
 int CMCPSession::ProcessResponse(
   int iErrCode, const std::shared_ptr<MCP::Message>& spMsg) {
-  if (!spMsg || !spMsg->IsValid())
+  if (!spMsg || !spMsg->IsValid()) {
+    LOG_ERROR("Invalid response message");
     return ERRNO_INTERNAL_ERROR;
+  }
   auto spResponse = std::dynamic_pointer_cast<MCP::Response>(spMsg);
-  if (!spResponse)
+  if (!spResponse) {
+    LOG_ERROR("Cannot cast to Response type");
     return ERRNO_INTERNAL_ERROR;
+  }
   m_hashMessage[MessageCategory_Response].push_back(spMsg);
 
   return ERRNO_INTERNAL_ERROR;
@@ -224,16 +279,22 @@ int CMCPSession::ProcessResponse(
 
 int CMCPSession::ProcessNotification(
   int iErrCode, const std::shared_ptr<MCP::Message>& spMsg) {
-  if (!spMsg || !spMsg->IsValid())
+  if (!spMsg || !spMsg->IsValid()) {
+    LOG_ERROR("Invalid notification message");
     return ERRNO_INTERNAL_ERROR;
+  }
   auto spNotification = std::dynamic_pointer_cast<MCP::Notification>(spMsg);
-  if (!spNotification)
+  if (!spNotification) {
+    LOG_ERROR("Cannot cast to Notification type");
     return ERRNO_INTERNAL_ERROR;
+  }
   m_hashMessage[MessageCategory_Notification].push_back(spMsg);
 
   if (ERRNO_OK != iErrCode) {
     return ERRNO_OK;
   }
+
+  LOG_INFO("Notification: {}", spNotification->strMethod);
 
   switch (spNotification->eMessageType) {
   case MessageType_InitializedNotification: {
@@ -241,6 +302,7 @@ int CMCPSession::ProcessNotification(
     if (ERRNO_OK == iErrCode) {
       return StartAsyncTaskThread();
     }
+    LOG_ERROR("State switch failed, error: {}", iErrCode);
     return iErrCode;
 
   } break;
@@ -250,6 +312,7 @@ int CMCPSession::ProcessNotification(
     if (spCancelledNotification && spCancelledNotification->IsValid()) {
       return CancelAsyncTask(spCancelledNotification->requestId);
     }
+    LOG_ERROR("Invalid CancelledNotification");
 
   } break;
   default:
@@ -261,13 +324,18 @@ int CMCPSession::ProcessNotification(
 
 int CMCPSession::ParseMessage(
   const std::string& strMsg, std::shared_ptr<MCP::Message>& spMsg) {
-  if (strMsg.empty())
+  if (strMsg.empty()) {
+    LOG_ERROR("Empty message");
     return ERRNO_PARSE_ERROR;
+  }
 
+  LOG_TRACE("Parsing message: {}", strMsg);
   Json::Reader reader;
   Json::Value jVal;
-  if (!reader.parse(strMsg, jVal) || !jVal.isObject())
+  if (!reader.parse(strMsg, jVal) || !jVal.isObject()) {
+    LOG_ERROR("JSON parsing failed");
     return ERRNO_PARSE_ERROR;
+  }
 
   MessageCategory eCategory{ MessageCategory_Unknown };
   if (jVal.isMember(MSG_KEY_ID)) {
@@ -282,8 +350,10 @@ int CMCPSession::ParseMessage(
     }
   }
 
-  if (MessageCategory_Unknown == eCategory)
+  if (MessageCategory_Unknown == eCategory) {
+    LOG_ERROR("Unknown message category");
     return ERRNO_PARSE_ERROR;
+  }
 
   switch (eCategory) {
   case MessageCategory_Request: {
@@ -467,14 +537,23 @@ std::shared_ptr<CMCPTransport> CMCPSession::GetTransport() const {
 }
 
 int CMCPSession::SwitchState(SessionState eState) {
+  LOG_INFO("State transition: {} -> {}", static_cast<int>(m_eSessionState),
+    static_cast<int>(eState));
+
   if (SessionState_Initializing == eState) {
-    if (SessionState_Original != m_eSessionState)
+    if (SessionState_Original != m_eSessionState) {
+      LOG_ERROR("Invalid state transition to Initializing from {}",
+        static_cast<int>(m_eSessionState));
       return ERRNO_INTERNAL_ERROR;
+    }
   }
 
   if (SessionState_Initialized == eState) {
-    if (SessionState_Initializing != m_eSessionState)
+    if (SessionState_Initializing != m_eSessionState) {
+      LOG_ERROR("Invalid state transition to Initialized from {}",
+        static_cast<int>(m_eSessionState));
       return ERRNO_INTERNAL_ERROR;
+    }
   }
 
   m_eSessionState = eState;
@@ -495,8 +574,10 @@ std::shared_ptr<MCP::ProcessRequest> CMCPSession::GetServerCallToolsTask(
 }
 
 int CMCPSession::CommitAsyncTask(const std::shared_ptr<MCP::CMCPTask>& spTask) {
-  if (!spTask)
+  if (!spTask) {
+    LOG_ERROR("Task is null");
     return ERRNO_INTERNAL_ERROR;
+  }
 
   if (m_bRunAsyncTask) {
     std::unique_lock<std::mutex> _lock(m_mtxAsyncThread);
@@ -516,8 +597,10 @@ int CMCPSession::CommitAsyncTask(const std::shared_ptr<MCP::CMCPTask>& spTask) {
 }
 
 int CMCPSession::CancelAsyncTask(const MCP::RequestId& requestId) {
-  if (!requestId.IsValid())
+  if (!requestId.IsValid()) {
+    LOG_ERROR("Invalid RequestId");
     return ERRNO_INVALID_NOTIFICATION;
+  }
 
   if (m_bRunAsyncTask) {
     std::unique_lock<std::mutex> _lock(m_mtxAsyncThread);
@@ -537,10 +620,14 @@ int CMCPSession::CancelAsyncTask(const MCP::RequestId& requestId) {
 }
 
 int CMCPSession::StartAsyncTaskThread() {
+  LOG_INFO("Async task thread starting");
+
   m_upTaskThread =
     std::make_unique<std::thread>(&CMCPSession::AsyncThreadProc, this);
-  if (!m_upTaskThread)
+  if (!m_upTaskThread) {
+    LOG_ERROR("Failed to create thread");
     return ERRNO_INTERNAL_ERROR;
+  }
 
   return ERRNO_OK;
 }
@@ -556,6 +643,8 @@ int CMCPSession::StopAsyncTaskThread() {
 }
 
 int CMCPSession::AsyncThreadProc() {
+  LOG_INFO("Async task thread started");
+
   while (m_bRunAsyncTask) {
     std::unique_lock<std::mutex> _lock(m_mtxAsyncThread);
 
@@ -626,13 +715,17 @@ int CMCPSession::AsyncThreadProc() {
     // Cache new tasks
     for (auto& spTask : vecTasks) {
       if (spTask) {
-        if (ERRNO_OK == spTask->Execute()) {
+        int iResult = spTask->Execute();
+        if (ERRNO_OK == iResult) {
           m_vecAsyncTasksCache.push_back(spTask);
+        } else {
+          LOG_ERROR("Task execution failed, error: {}", iResult);
         }
       }
     }
   }
 
+  LOG_INFO("Async task thread terminated");
   return ERRNO_OK;
 }
 }  // namespace MCP

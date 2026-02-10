@@ -4,3 +4,5 @@
 [submodule "Source/External/cpp-httplib"]
 	path = Source/External/cpp-httplib
 	url = https://github.com/yhirose/cpp-httplib.git
+[submodule "Source/External/spdlog"]
+	path = Source/External/spdlog

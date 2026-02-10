@@ -32,6 +32,7 @@ endif()
 target_include_directories(${TARGET_NAME} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/External/jsoncpp/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/External/cpp-httplib>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/External/spdlog/include>
 )
 
 target_link_libraries(${TARGET_NAME} PUBLIC jsoncpp_static)

@@ -13,6 +13,8 @@
 #include <iostream>
 #include <thread>
 
+#include "../Public/Logger.h"
+
 namespace MCP {
 
 CStdioTransport::CStdioTransport() : m_running(true) {}
@@ -39,13 +41,15 @@ int CStdioTransport::Read(std::string& strOut) {
 #ifdef _WIN32
     HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
     if (hStdin == INVALID_HANDLE_VALUE) {
+      LOG_ERROR("CStdioTransport::Read: Failed to get stdin handle");
       return ERRNO_INTERNAL_INPUT_ERROR;
     }
 
-    // 超时设置为50ms，平衡响应速度和CPU占用
+    // Timeout set to 50ms to balance responsiveness and CPU usage
     DWORD waitResult = WaitForSingleObject(hStdin, 50);
 
     if (waitResult == WAIT_FAILED) {
+      LOG_ERROR("CStdioTransport::Read: Wait for input failed");
       return ERRNO_INTERNAL_INPUT_ERROR;
     }
 
@@ -66,6 +70,7 @@ int CStdioTransport::Read(std::string& strOut) {
         if (std::cin.eof()) {
           return ERRNO_INTERNAL_INPUT_TERMINATE;
         } else {
+          LOG_ERROR("CStdioTransport::Read: Failed to read input");
           return ERRNO_INTERNAL_INPUT_ERROR;
         }
       }
@@ -75,11 +80,12 @@ int CStdioTransport::Read(std::string& strOut) {
     fds[0].fd = STDIN_FILENO;
     fds[0].events = POLLIN;
 
-    // 超时设置为50ms，平衡响应速度和CPU占用
+    // Timeout set to 50ms to balance responsiveness and CPU usage
     int ret = poll(fds, 1, 50);
 
     if (ret < 0) {
-      // poll出错
+      LOG_ERROR(
+        "CStdioTransport::Read: poll call failed, error code: {}", errno);
       return ERRNO_INTERNAL_INPUT_ERROR;
     }
 
@@ -94,6 +100,7 @@ int CStdioTransport::Read(std::string& strOut) {
         if (std::cin.eof()) {
           return ERRNO_INTERNAL_INPUT_TERMINATE;
         } else {
+          LOG_ERROR("CStdioTransport::Read: Failed to read input");
           return ERRNO_INTERNAL_INPUT_ERROR;
         }
       }
@@ -129,32 +136,35 @@ CHttpTransport::~CHttpTransport() {
 }
 
 int CHttpTransport::Connect() {
+  LOG_INFO(
+    "CHttpTransport::Connect: Starting HTTP server {}:{}", m_strHost, m_nPort);
   try {
     m_server = std::make_unique<httplib::Server>();
 
-    // 设置POST处理函数
+    // Set up POST handler
     m_server->Post("/", [this](
                           const httplib::Request& req, httplib::Response& res) {
-      // 创建新的连接上下文
+      LOG_INFO("CHttpTransport::Connect: POST request received");
+      // Create new connection context
       auto connContext = std::make_shared<ConnectionContext>();
       ConnectionId connId;
 
-      // 在锁保护下分配ID并添加到连接映射
+      // Assign ID and add to connection map under lock protection
       {
         std::lock_guard<std::mutex> lock(m_mutex);
         connId = m_nextConnectionId++;
         m_connections[connId] = connContext;
 
-        // 在连接锁保护下设置请求数据
+        // Set request data under connection lock protection
         std::lock_guard<std::mutex> connLock(connContext->mutex);
         connContext->request_body = req.body;
         connContext->has_request = true;
-        m_requestCond.notify_one();  // 通知Read函数有新请求
+        m_requestCond.notify_one();  // Notify Read function of new request
       }
 
-      {  // 等待响应
+      {  // Wait for response
         std::unique_lock<std::mutex> lock(connContext->mutex);
-        // 等待响应准备好或服务器停止
+        // Wait until response is ready or server stops
         connContext->response_cond.wait(lock, [this, connContext]() {
           return !m_running || connContext->has_response;
         });
@@ -168,37 +178,38 @@ int CHttpTransport::Connect() {
         }
       }
 
-      // 在外部清理连接（不持有连接的mutex）
+      // Clean up connection externally (without holding connection mutex)
       {
         std::lock_guard<std::mutex> lock(m_mutex);
         m_connections.erase(connId);
       }
     });
 
-    // 启动服务器线程
+    // Start server thread
     m_running = true;
-    std::thread server_thread([this]() {
-      std::cout << "HTTP server listening on " << m_strHost << ":" << m_nPort
-                << std::endl;
-      m_server->listen(m_strHost, m_nPort);
-    });
+    std::thread server_thread(
+      [this]() { m_server->listen(m_strHost, m_nPort); });
     server_thread.detach();
 
-    // 等待服务器启动并验证
-    for (int i = 0; i < 50; ++i) {  // 最多等待500ms
+    // Wait for server startup and verify
+    for (int i = 0; i < 50; ++i) {  // Wait up to 500ms
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
       if (m_server && m_server->is_running()) {
-        std::cout << "HTTP server started successfully" << std::endl;
+        LOG_INFO(
+          "CHttpTransport::Connect: HTTP server started successfully {}:{}",
+          m_strHost, m_nPort);
         return ERRNO_OK;
       }
     }
 
-    // 启动超时或失败
-    std::cerr << "HTTP server failed to start within timeout" << std::endl;
+    // Startup timeout or failure
+    LOG_ERROR("CHttpTransport::Connect: HTTP server startup timeout {}:{}",
+      m_strHost, m_nPort);
     m_running = false;
     return ERRNO_INTERNAL_ERROR;
   } catch (const std::exception& e) {
-    std::cerr << "HTTP server start error: " << e.what() << std::endl;
+    LOG_ERROR(
+      "CHttpTransport::Connect: HTTP server startup exception: {}", e.what());
     m_running = false;
     return ERRNO_INTERNAL_ERROR;
   }
@@ -209,8 +220,8 @@ int CHttpTransport::Disconnect() {
     if (m_running && m_server) {
       m_running = false;
 
-      // 通知所有活跃连接服务器停止
-      {  // 作用域：通知所有连接
+      // Notify all active connections that server is stopping
+      {
         std::lock_guard<std::mutex> lock(m_mutex);
         for (const auto& pair : m_connections) {
           std::lock_guard<std::mutex> connLock(pair.second->mutex);
@@ -224,7 +235,8 @@ int CHttpTransport::Disconnect() {
     }
     return ERRNO_OK;
   } catch (const std::exception& e) {
-    std::cerr << "HTTP server stop error: " << e.what() << std::endl;
+    LOG_ERROR(
+      "CHttpTransport::Disconnect: HTTP server stop exception: {}", e.what());
     return ERRNO_INTERNAL_ERROR;
   }
 }
@@ -232,18 +244,19 @@ int CHttpTransport::Disconnect() {
 int CHttpTransport::Read(std::string& strOut) {
   try {
     if (!m_running || !m_server) {
+      LOG_ERROR("CHttpTransport::Read: Server not running or not initialized");
       return ERRNO_INTERNAL_ERROR;
     }
 
-    // 使用带超时的等待，以便能够响应停止请求
+    // Use wait with timeout to respond to stop requests
     std::unique_lock<std::mutex> lock(m_mutex);
     while (m_running) {
-      // 等待最多100ms，然后重新检查条件
+      // Wait up to 100ms, then recheck conditions
       bool hasData =
         m_requestCond.wait_for(lock, std::chrono::milliseconds(100), [this]() {
           if (!m_running)
             return true;
-          // 检查是否有任何连接有请求（需要锁保护）
+          // Check if any connection has a request (needs lock protection)
           for (const auto& pair : m_connections) {
             std::lock_guard<std::mutex> connLock(pair.second->mutex);
             if (pair.second->has_request) {
@@ -253,23 +266,23 @@ int CHttpTransport::Read(std::string& strOut) {
           return false;
         });
 
-      // 如果收到停止信号，立即返回
+      // If stop signal received, return immediately
       if (!m_running) {
         return ERRNO_INTERNAL_INPUT_TERMINATE;
       }
 
-      // 如果有数据到达，跳出循环继续处理
+      // If data arrived, break loop to continue processing
       if (hasData) {
         break;
       }
     }
 
-    // 再次检查运行状态
+    // Check running state again
     if (!m_running) {
       return ERRNO_INTERNAL_INPUT_TERMINATE;
     }
 
-    // 找到第一个有请求的连接（使用shared_ptr保证安全）
+    // Find first connection with a request (use shared_ptr for safety)
     std::shared_ptr<ConnectionContext> selectedContext;
     ConnectionId selectedConnId = 0;
     for (const auto& pair : m_connections) {
@@ -282,14 +295,15 @@ int CHttpTransport::Read(std::string& strOut) {
     }
 
     if (!selectedContext) {
+      LOG_ERROR("CHttpTransport::Read: No valid request connection found");
       return ERRNO_INTERNAL_ERROR;
     }
 
-    // 保存当前处理的连接
+    // Save currently processing connection
     m_currentConnectionId = selectedConnId;
     m_currentConnection = selectedContext;
 
-    // 获取请求体（需要在连接的锁保护下）
+    // Get request body (needs connection lock protection)
     {
       std::lock_guard<std::mutex> connLock(selectedContext->mutex);
       strOut = selectedContext->request_body;
@@ -299,7 +313,7 @@ int CHttpTransport::Read(std::string& strOut) {
 
     return ERRNO_OK;
   } catch (const std::exception& e) {
-    std::cerr << "HTTP read error: " << e.what() << std::endl;
+    LOG_ERROR("CHttpTransport::Read: Read exception: {}", e.what());
     return ERRNO_INTERNAL_ERROR;
   }
 }
@@ -307,24 +321,26 @@ int CHttpTransport::Read(std::string& strOut) {
 int CHttpTransport::Write(const std::string& strIn) {
   try {
     if (!m_running || !m_server) {
+      LOG_ERROR("CHttpTransport::Write: Server not running or not initialized");
       return ERRNO_INTERNAL_ERROR;
     }
 
-    // 检查是否有当前处理的连接
+    // Check if there is a currently processing connection
     if (!m_currentConnection) {
+      LOG_ERROR("CHttpTransport::Write: No active connection");
       return ERRNO_INTERNAL_ERROR;
     }
 
-    // 设置响应并通知对应连接的Post处理函数
+    // Set response and notify corresponding connection's Post handler
     {
       std::lock_guard<std::mutex> connLock(m_currentConnection->mutex);
       m_currentConnection->response_body = strIn;
       m_currentConnection->has_response = true;
       m_currentConnection->response_cond
-        .notify_one();  // 通知对应连接的Post处理函数
+        .notify_one();  // Notify corresponding connection's Post handler
     }
 
-    // 清除当前连接信息
+    // Clear current connection info
     {
       std::lock_guard<std::mutex> lock(m_mutex);
       m_currentConnectionId = 0;
@@ -333,14 +349,13 @@ int CHttpTransport::Write(const std::string& strIn) {
 
     return ERRNO_OK;
   } catch (const std::exception& e) {
-    std::cerr << "HTTP write error: " << e.what() << std::endl;
+    LOG_ERROR("CHttpTransport::Write: Write exception: {}", e.what());
     return ERRNO_INTERNAL_ERROR;
   }
 }
 
 int CHttpTransport::Error(const std::string& strIn) {
-  // 处理错误，输出到标准错误
-  std::cerr << "HTTP transport error: " << strIn << std::endl;
+  LOG_ERROR("CHttpTransport::Error: {}", strIn);
   return ERRNO_OK;
 }
 
