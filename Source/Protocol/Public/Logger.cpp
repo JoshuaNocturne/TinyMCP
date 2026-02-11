@@ -12,14 +12,13 @@ Logger& Logger::Instance() {
 }
 
 Logger::Logger() : m_initialized(false) {
-  // 默认创建一个控制台日志记录器
   try {
     auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
     console_sink->set_level(spdlog::level::trace);
 
     m_logger = std::make_shared<spdlog::logger>("tinymcp", console_sink);
     m_logger->set_level(spdlog::level::trace);
-    m_logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [thread %t] [%s:%#] %v");
+    m_logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [%t] [%s:%#] %v");
 
     spdlog::register_logger(m_logger);
   } catch (const spdlog::spdlog_ex& ex) {
@@ -43,12 +42,10 @@ void Logger::Initialize(const std::string& logFileName, LogLevel level,
   try {
     std::vector<spdlog::sink_ptr> sinks;
 
-    // 添加控制台输出
     auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
     console_sink->set_level(spdlog::level::trace);
     sinks.push_back(console_sink);
 
-    // 如果指定了日志文件名，添加文件输出
     if (!logFileName.empty()) {
       auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
         logFileName, maxFileSize, maxFiles);
@@ -56,25 +53,18 @@ void Logger::Initialize(const std::string& logFileName, LogLevel level,
       sinks.push_back(file_sink);
     }
 
-    // 创建logger
     m_logger =
       std::make_shared<spdlog::logger>("tinymcp", sinks.begin(), sinks.end());
 
-    // 设置日志级别
     SetLevel(level);
 
-    // 设置日志格式：[时间] [级别] [线程] [文件:行号] 消息
-    m_logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [thread %t] [%s:%#] %v");
-
-    // 设置立即刷新
+    m_logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [%t] [%s:%#] %v");
     m_logger->flush_on(spdlog::level::err);
-
-    // 注册logger
     spdlog::register_logger(m_logger);
 
     m_initialized = true;
 
-    Info(spdlog::source_loc{__FILE__, __LINE__, SPDLOG_FUNCTION}, "Logger initialized successfully");
+    m_logger->info("Logger initialized successfully");
   } catch (const spdlog::spdlog_ex& ex) {
     // 初始化失败时使用默认logger
     m_logger = spdlog::default_logger();
@@ -122,3 +112,4 @@ void Logger::Flush() {
 }
 
 }  // namespace MCP
+

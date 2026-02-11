@@ -305,6 +305,8 @@ int CHttpTransport::Read(std::string& strOut) {
 
     // Get request body (needs connection lock protection)
     {
+      LOG_TRACE("CHttpTransport::Read: Reading request body: {}",
+        selectedContext->request_body);
       std::lock_guard<std::mutex> connLock(selectedContext->mutex);
       strOut = selectedContext->request_body;
       selectedContext->request_body.clear();
@@ -333,6 +335,7 @@ int CHttpTransport::Write(const std::string& strIn) {
 
     // Set response and notify corresponding connection's Post handler
     {
+      LOG_TRACE("CHttpTransport::Write: Writing response body: {}", strIn);
       std::lock_guard<std::mutex> connLock(m_currentConnection->mutex);
       m_currentConnection->response_body = strIn;
       m_currentConnection->has_response = true;
