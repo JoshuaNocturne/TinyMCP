@@ -77,10 +77,13 @@ int ProcessErrorRequest::Execute() {
       break;
     }
   }
+  if (m_spRequest)
+    spErrorResponse->requestId = m_spRequest->requestId;
   spErrorResponse->iCode = m_iCode;
   spErrorResponse->strMesage = m_strMessage;
 
-  LOG_INFO("Sending error response: code={}, message={}", m_iCode, m_strMessage);
+  LOG_INFO(
+    "Sending error response: code={}, message={}", m_iCode, m_strMessage);
 
   std::string strResponse;
   if (ERRNO_OK != spErrorResponse->Serialize(strResponse)) {

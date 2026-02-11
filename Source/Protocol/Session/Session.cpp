@@ -160,6 +160,10 @@ int CMCPSession::ProcessRequest(
     }
 
     iErrCode = SwitchState(SessionState_Initializing);
+    if (ERRNO_OK != iErrCode) {
+      LOG_ERROR("State switch failed, error: {}", iErrCode);
+      goto PROC_END;
+    }
 
   } break;
   case MessageType_PingRequest: {
@@ -174,8 +178,7 @@ int CMCPSession::ProcessRequest(
       LOG_ERROR("PingRequest failed, error: {}", iErrCode);
       goto PROC_END;
     }
-    break;
-  }
+  } break;
   case MessageType_ListToolsRequest: {
     if (CMCPSession::SessionState_Initialized !=
         CMCPSession::GetInstance().GetSessionState()) {
@@ -195,6 +198,7 @@ int CMCPSession::ProcessRequest(
     iErrCode = spTask->Execute();
     if (ERRNO_OK != iErrCode) {
       LOG_ERROR("ListToolsRequest failed, error: {}", iErrCode);
+      goto PROC_END;
     }
 
   } break;
@@ -242,6 +246,7 @@ int CMCPSession::ProcessRequest(
     iErrCode = CommitAsyncTask(spNewProcessCallToolRequest);
     if (ERRNO_OK != iErrCode) {
       LOG_ERROR("Failed to commit async task, error: {}", iErrCode);
+      goto PROC_END;
     }
 
   } break;
@@ -249,15 +254,17 @@ int CMCPSession::ProcessRequest(
     break;
   }
 
-PROC_END: {
-  auto spTask = std::make_shared<ProcessErrorRequest>(spRequest);
-  if (spTask) {
-    spTask->SetErrorCode(iErrCode);
-    spTask->SetErrorMessage(strMessage);
-    spTask->Execute();
-  }
-}
+  return iErrCode;
 
+PROC_END:
+  if (ERRNO_OK != iErrCode) {
+    auto spTask = std::make_shared<ProcessErrorRequest>(spRequest);
+    if (spTask) {
+      spTask->SetErrorCode(iErrCode);
+      spTask->SetErrorMessage(strMessage);
+      spTask->Execute();
+    }
+  }
   return iErrCode;
 }
 
@@ -300,6 +307,17 @@ int CMCPSession::ProcessNotification(
   case MessageType_InitializedNotification: {
     int iErrCode = SwitchState(SessionState_Initialized);
     if (ERRNO_OK == iErrCode) {
+      auto spTransport = CMCPSession::GetInstance().GetTransport();
+      if (!spTransport) {
+        LOG_ERROR("Transport not available");
+        return ERRNO_INTERNAL_ERROR;
+      }
+      // initialized notification need response
+      if (ERRNO_OK != spTransport->Write("")) {
+        LOG_ERROR("Failed to write ping response");
+        return ERRNO_INTERNAL_ERROR;
+      }
+
       return StartAsyncTaskThread();
     }
     LOG_ERROR("State switch failed, error: {}", iErrCode);
@@ -329,7 +347,6 @@ int CMCPSession::ParseMessage(
     return ERRNO_PARSE_ERROR;
   }
 
-  LOG_TRACE("Parsing message: {}", strMsg);
   Json::Reader reader;
   Json::Value jVal;
   if (!reader.parse(strMsg, jVal) || !jVal.isObject()) {
