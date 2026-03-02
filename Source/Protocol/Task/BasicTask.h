@@ -6,6 +6,9 @@
 #include <memory>
 
 namespace MCP {
+
+class CMCPSession;
+
 class ProcessRequest : public MCP::CMCPTask {
 public:
   ProcessRequest(const std::shared_ptr<MCP::Request>& spRequest)
@@ -19,9 +22,11 @@ public:
 
   void SetRequest(const std::shared_ptr<MCP::Request>& spRequest);
   std::shared_ptr<MCP::Request> GetRequest() const;
+  void SetSession(CMCPSession* pSession);
 
 protected:
   std::shared_ptr<MCP::Request> m_spRequest;
+  CMCPSession* m_pSession{ nullptr };
 };
 
 class ProcessErrorRequest : public ProcessRequest {
@@ -82,4 +87,6 @@ private:
   bool m_bFinished{ false };
   bool m_bCancelled{ false };
 };
+
 }  // namespace MCP
+

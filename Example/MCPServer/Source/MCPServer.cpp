@@ -1,15 +1,9 @@
 ﻿#include <signal.h>
 
-#include <atomic>
-#include <chrono>
 #include <cstring>
 #include <iostream>
-#include <memory>
-#include <thread>
 
 #include "EchoServer.h"
-#include "Session/Session.h"
-#include "Transport/Transport.h"
 
 int LaunchEchoServer(Implementation::TransportType transportType,
   const std::string& host, int port) {
@@ -35,7 +29,7 @@ int LaunchEchoServer(Implementation::TransportType transportType,
 
 void signal_handler(int signal) {
   auto& server = Implementation::CEchoServer::GetInstance();
-  server.RequestStop();
+  server.Stop();
 }
 
 void print_usage(const char* program_name) {
@@ -116,3 +110,4 @@ int main(int argc, char* argv[]) {
 
   return LaunchEchoServer(transportType, host, port);
 }
+

@@ -8,6 +8,8 @@ namespace MCP {
 static constexpr const char* PROTOCOL_VER = "2024-11-05";
 static constexpr const char* JSON_RPC_VER = "2.0";
 
+static constexpr const char* HEADER_SESSION_ID = "mcp-session-id";
+
 static constexpr const char* MSG_KEY_JSONRPC = "jsonrpc";
 static constexpr const char* MSG_KEY_ID = "id";
 static constexpr const char* MSG_KEY_METHOD = "method";
@@ -70,7 +72,7 @@ static constexpr const char* ERROR_MESSAGE_METHOD_NOT_FOUND =
 static constexpr const char* ERROR_MESSAGE_INVALID_PARAMS = u8"invalid params";
 static constexpr const char* ERROR_MESSAGE_INTERNAL_ERROR = u8"internal error";
 
-// json rpc 2.0±ê×¼´íÎóÂë
+// json rpc 2.0标准错误码
 static constexpr const int ERRNO_OK = 0;
 static constexpr const int ERRNO_PARSE_ERROR = -32700;
 static constexpr const int ERRNO_INVALID_REQUEST = -32600;
@@ -78,7 +80,7 @@ static constexpr const int ERRNO_METHOD_NOT_FOUND = -32601;
 static constexpr const int ERRNO_INVALID_PARAMS = -32602;
 static constexpr const int ERRNO_INTERNAL_ERROR = -32603;
 
-// server×Ô¶¨Òå´íÎóÂë
+// server自定义错误码
 static constexpr const int ERRNO_SERVER_ERROR_FIRST = -32000;
 static constexpr const int ERRNO_INVALID_RESPONSE = -32001;
 static constexpr const int ERRNO_INVALID_NOTIFICATION = -32002;

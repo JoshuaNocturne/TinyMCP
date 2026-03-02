@@ -1,19 +1,18 @@
 #pragma once
 
-#include "../Message/BasicMessage.h"
-#include "../Message/Request.h"
-#include "../Public/PublicDef.h"
-#include "../Task/BasicTask.h"
-#include "../Transport/Transport.h"
 #include <atomic>
 #include <condition_variable>
 #include <deque>
 #include <memory>
 #include <mutex>
-#include <set>
 #include <thread>
 #include <unordered_map>
 #include <vector>
+
+#include "../Message/BasicMessage.h"
+#include "../Public/PublicDef.h"
+#include "../Task/BasicTask.h"
+#include "../Transport/Channel.h"
 
 namespace MCP {
 class CMCPSession {
@@ -26,16 +25,14 @@ public:
     SessionState_Shut,
   };
 
-  ~CMCPSession() = default;
+  explicit CMCPSession(std::shared_ptr<IChannel> channel);
+  ~CMCPSession();
   CMCPSession(const CMCPSession&) = delete;
   CMCPSession& operator=(const CMCPSession&) = delete;
-  static CMCPSession& GetInstance();
 
-  int Ready();
   int Run();
   int Terminate();
 
-  void SetTransport(const std::shared_ptr<CMCPTransport>& spTransport);
   void SetServerInfo(const MCP::Implementation& impl);
   void SetServerCapabilities(const MCP::ServerCapabilities& capabilities);
   void SetServerToolsPagination(bool bPagination);
@@ -46,13 +43,15 @@ public:
   MCP::ServerCapabilities GetServerCapabilities() const;
   bool GetServerToolsPagination() const;
   std::vector<MCP::Tool> GetServerTools() const;
-  std::shared_ptr<CMCPTransport> GetTransport() const;
+  void SetChannel(std::shared_ptr<IChannel> channel);
+  std::shared_ptr<IChannel> GetChannel() const;
   SessionState GetSessionState() const;
   std::shared_ptr<MCP::ProcessRequest> GetServerCallToolsTask(
     const std::string& strToolName);
+  void SetSessionId(const std::string& strSessionId);
+  const std::string& GetSessionId() const;
 
 private:
-  CMCPSession() = default;
   int ParseMessage(
     const std::string& strMsg, std::shared_ptr<MCP::Message>& spMsg);
   int ParseRequest(
@@ -68,17 +67,15 @@ private:
     int iErrCode, const std::shared_ptr<MCP::Message>& spMsg);
   int SwitchState(SessionState eState);
 
-  // Òì²½ÈÎÎñ
   int CommitAsyncTask(const std::shared_ptr<MCP::CMCPTask>& spTask);
   int CancelAsyncTask(const MCP::RequestId& requestId);
   int StartAsyncTaskThread();
   int StopAsyncTaskThread();
   int AsyncThreadProc();
 
-  static CMCPSession s_Instance;
-
   SessionState m_eSessionState{ SessionState_Original };
-  std::shared_ptr<CMCPTransport> m_spTransport;
+  std::string m_strSessionId;
+  std::shared_ptr<IChannel> m_channel;
 
   MCP::Implementation m_serverInfo;
   MCP::ServerCapabilities m_capabilities;
@@ -91,7 +88,6 @@ private:
   std::unordered_map<std::string, std::shared_ptr<MCP::ProcessCallToolRequest>>
     m_hashCallToolsTasks;
 
-  // Òì²½ÈÎÎñ
   std::unique_ptr<std::thread> m_upTaskThread;
   std::atomic_bool m_bRunAsyncTask{ true };
   std::mutex m_mtxAsyncThread;
@@ -100,4 +96,6 @@ private:
   std::vector<MCP::RequestId> m_vecCancelledTaskIds;
   std::vector<std::shared_ptr<MCP::CMCPTask>> m_vecAsyncTasksCache;
 };
+
 }  // namespace MCP
+

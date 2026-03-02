@@ -1,4 +1,12 @@
 #include "Session.h"
+
+#include <algorithm>
+#include <chrono>
+#include <future>
+#include <memory>
+
+#include <json/json.h>
+
 #include "../Message/BasicMessage.h"
 #include "../Message/Notification.h"
 #include "../Message/Request.h"
@@ -7,49 +15,32 @@
 #include "../Public/PublicDef.h"
 #include "../Task/BasicTask.h"
 
-#include <algorithm>
-#include <json/json.h>
-#include <memory>
-
 namespace MCP {
-CMCPSession CMCPSession::s_Instance;
 
-CMCPSession& CMCPSession::GetInstance() {
-  return s_Instance;
+CMCPSession::CMCPSession(std::shared_ptr<IChannel> channel)
+  : m_channel(channel) {
+  if (!m_channel) {
+    LOG_ERROR("CMCPSession: Invalid channel");
+  }
 }
 
-int CMCPSession::Ready() {
-  LOG_INFO("Session ready started");
-
-  if (!m_spTransport) {
-    LOG_ERROR("Transport not set");
-    return ERRNO_INTERNAL_ERROR;
-  }
-
-  int iErrCode = ERRNO_OK;
-  iErrCode = m_spTransport->Connect();
-  if (ERRNO_OK != iErrCode) {
-    LOG_ERROR("Transport connection failed, error: {}", iErrCode);
-    return iErrCode;
-  }
-
-  LOG_INFO("Session ready completed");
-  return iErrCode;
+CMCPSession::~CMCPSession() {
+  Terminate();
 }
 
 int CMCPSession::Run() {
   LOG_INFO("Session message loop started");
 
-  if (!m_spTransport) {
-    LOG_ERROR("Transport not set");
+  if (!m_channel) {
+    LOG_ERROR("Channel not set");
     return ERRNO_INTERNAL_ERROR;
   }
 
   int iErrCode = ERRNO_OK;
 
-  while (true) {
+  while (m_channel->IsActive()) {
     std::string strIncomingMsg;
-    iErrCode = m_spTransport->Read(strIncomingMsg);
+    iErrCode = m_channel->Read(strIncomingMsg);
     if (ERRNO_OK == iErrCode) {
       std::shared_ptr<MCP::Message> spMsg;
       iErrCode = ParseMessage(strIncomingMsg, spMsg);
@@ -68,24 +59,26 @@ int CMCPSession::Terminate() {
   LOG_INFO("Session terminating");
 
   StopAsyncTaskThread();
+
   if (m_upTaskThread && m_upTaskThread->joinable()) {
-    m_upTaskThread->join();
+    auto future = std::async(std::launch::async, [this]() {
+      if (m_upTaskThread->joinable()) {
+        m_upTaskThread->join();
+      }
+    });
+
+    if (future.wait_for(std::chrono::seconds(3)) ==
+        std::future_status::timeout) {
+      LOG_ERROR("Session::Terminate: Async task thread join timeout");
+    }
   }
 
-  if (!m_spTransport) {
-    LOG_ERROR("Transport not set");
-    return ERRNO_INTERNAL_ERROR;
-  }
-
-  int iErrCode = ERRNO_OK;
-  iErrCode = m_spTransport->Disconnect();
-  if (ERRNO_OK != iErrCode) {
-    LOG_ERROR("Transport disconnection failed, error: {}", iErrCode);
-    return iErrCode;
+  if (m_channel) {
+    m_channel->Close();
   }
 
   LOG_INFO("Session terminated");
-  return iErrCode;
+  return ERRNO_OK;
 }
 
 int CMCPSession::ProcessMessage(
@@ -139,8 +132,7 @@ int CMCPSession::ProcessRequest(
 
   switch (spRequest->eMessageType) {
   case MessageType_InitializeRequest: {
-    if (CMCPSession::SessionState_Original !=
-        CMCPSession::GetInstance().GetSessionState()) {
+    if (SessionState_Original != GetSessionState()) {
       LOG_ERROR("InitializeRequest in invalid state");
       strMessage = ERROR_MESSAGE_INVALID_REQUEST;
       iErrCode = ERRNO_INVALID_REQUEST;
@@ -153,6 +145,7 @@ int CMCPSession::ProcessRequest(
       iErrCode = ERRNO_INTERNAL_ERROR;
       goto PROC_END;
     }
+    spTask->SetSession(this);
     iErrCode = spTask->Execute();
     if (ERRNO_OK != iErrCode) {
       LOG_ERROR("InitializeRequest failed, error: {}", iErrCode);
@@ -173,6 +166,7 @@ int CMCPSession::ProcessRequest(
       iErrCode = ERRNO_INTERNAL_ERROR;
       goto PROC_END;
     }
+    spTask->SetSession(this);
     iErrCode = spTask->Execute();
     if (ERRNO_OK != iErrCode) {
       LOG_ERROR("PingRequest failed, error: {}", iErrCode);
@@ -180,8 +174,7 @@ int CMCPSession::ProcessRequest(
     }
   } break;
   case MessageType_ListToolsRequest: {
-    if (CMCPSession::SessionState_Initialized !=
-        CMCPSession::GetInstance().GetSessionState()) {
+    if (SessionState_Initialized != GetSessionState()) {
       LOG_ERROR("ListToolsRequest in invalid state");
       strMessage = ERROR_MESSAGE_INVALID_REQUEST;
       iErrCode = ERRNO_INVALID_REQUEST;
@@ -194,6 +187,7 @@ int CMCPSession::ProcessRequest(
       iErrCode = ERRNO_INTERNAL_ERROR;
       goto PROC_END;
     }
+    spTask->SetSession(this);
 
     iErrCode = spTask->Execute();
     if (ERRNO_OK != iErrCode) {
@@ -203,8 +197,7 @@ int CMCPSession::ProcessRequest(
 
   } break;
   case MessageType_CallToolRequest: {
-    if (CMCPSession::SessionState_Initialized !=
-        CMCPSession::GetInstance().GetSessionState()) {
+    if (SessionState_Initialized != GetSessionState()) {
       LOG_ERROR("CallToolRequest in invalid state");
       iErrCode = ERRNO_INVALID_REQUEST;
       goto PROC_END;
@@ -221,8 +214,7 @@ int CMCPSession::ProcessRequest(
     LOG_INFO("Calling tool: {}", spCallToolRequest->strName);
 
     auto spProcessCallToolRequest =
-      CMCPSession::GetInstance().GetServerCallToolsTask(
-        spCallToolRequest->strName);
+      GetServerCallToolsTask(spCallToolRequest->strName);
     if (!spProcessCallToolRequest) {
       LOG_ERROR("Tool not found: {}", spCallToolRequest->strName);
       strMessage = ERROR_MESSAGE_INVALID_PARAMS;
@@ -243,6 +235,7 @@ int CMCPSession::ProcessRequest(
       goto PROC_END;
     }
     spNewProcessCallToolRequest->SetRequest(spRequest);
+    spNewProcessCallToolRequest->SetSession(this);
     iErrCode = CommitAsyncTask(spNewProcessCallToolRequest);
     if (ERRNO_OK != iErrCode) {
       LOG_ERROR("Failed to commit async task, error: {}", iErrCode);
@@ -260,6 +253,7 @@ PROC_END:
   if (ERRNO_OK != iErrCode) {
     auto spTask = std::make_shared<ProcessErrorRequest>(spRequest);
     if (spTask) {
+      spTask->SetSession(this);
       spTask->SetErrorCode(iErrCode);
       spTask->SetErrorMessage(strMessage);
       spTask->Execute();
@@ -307,13 +301,12 @@ int CMCPSession::ProcessNotification(
   case MessageType_InitializedNotification: {
     int iErrCode = SwitchState(SessionState_Initialized);
     if (ERRNO_OK == iErrCode) {
-      auto spTransport = CMCPSession::GetInstance().GetTransport();
-      if (!spTransport) {
-        LOG_ERROR("Transport not available");
+      auto channel = GetChannel();
+      if (!channel) {
+        LOG_ERROR("Channel not available");
         return ERRNO_INTERNAL_ERROR;
       }
-      // initialized notification need response
-      if (ERRNO_OK != spTransport->Write("")) {
+      if (ERRNO_OK != channel->Write("")) {
         LOG_ERROR("Failed to write ping response");
         return ERRNO_INTERNAL_ERROR;
       }
@@ -506,11 +499,6 @@ int CMCPSession::ParseNotification(
   return ERRNO_INTERNAL_ERROR;
 }
 
-void CMCPSession::SetTransport(
-  const std::shared_ptr<CMCPTransport>& spTransport) {
-  m_spTransport = spTransport;
-}
-
 void CMCPSession::SetServerInfo(const MCP::Implementation& impl) {
   m_serverInfo = impl;
 }
@@ -549,8 +537,12 @@ std::vector<MCP::Tool> CMCPSession::GetServerTools() const {
   return m_tools;
 }
 
-std::shared_ptr<CMCPTransport> CMCPSession::GetTransport() const {
-  return m_spTransport;
+void CMCPSession::SetChannel(std::shared_ptr<IChannel> channel) {
+  m_channel = channel;
+}
+
+std::shared_ptr<IChannel> CMCPSession::GetChannel() const {
+  return m_channel;
 }
 
 int CMCPSession::SwitchState(SessionState eState) {
@@ -580,6 +572,14 @@ int CMCPSession::SwitchState(SessionState eState) {
 
 CMCPSession::SessionState CMCPSession::GetSessionState() const {
   return m_eSessionState;
+}
+
+void CMCPSession::SetSessionId(const std::string& strSessionId) {
+  m_strSessionId = strSessionId;
+}
+
+const std::string& CMCPSession::GetSessionId() const {
+  return m_strSessionId;
 }
 
 std::shared_ptr<MCP::ProcessRequest> CMCPSession::GetServerCallToolsTask(
@@ -745,4 +745,6 @@ int CMCPSession::AsyncThreadProc() {
   LOG_INFO("Async task thread terminated");
   return ERRNO_OK;
 }
+
 }  // namespace MCP
+

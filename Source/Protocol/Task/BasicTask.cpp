@@ -1,4 +1,8 @@
 #include "BasicTask.h"
+
+#include <chrono>
+#include <random>
+
 #include "../Message/Notification.h"
 #include "../Public/Logger.h"
 #include "../Session/Session.h"
@@ -36,6 +40,10 @@ void ProcessRequest::SetRequest(
 
 std::shared_ptr<MCP::Request> ProcessRequest::GetRequest() const {
   return m_spRequest;
+}
+
+void ProcessRequest::SetSession(CMCPSession* pSession) {
+  m_pSession = pSession;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -90,12 +98,16 @@ int ProcessErrorRequest::Execute() {
     LOG_ERROR("Failed to serialize error response");
     return ERRNO_INTERNAL_ERROR;
   }
-  auto spTransport = CMCPSession::GetInstance().GetTransport();
-  if (!spTransport) {
-    LOG_ERROR("Transport not available");
+  if (!m_pSession) {
+    LOG_ERROR("Session not available");
     return ERRNO_INTERNAL_ERROR;
   }
-  if (ERRNO_OK != spTransport->Write(strResponse)) {
+  auto channel = m_pSession->GetChannel();
+  if (!channel) {
+    LOG_ERROR("Channel not available");
+    return ERRNO_INTERNAL_ERROR;
+  }
+  if (ERRNO_OK != channel->Write(strResponse)) {
     LOG_ERROR("Failed to write error response");
     return ERRNO_INTERNAL_ERROR;
   }
@@ -130,23 +142,43 @@ int ProcessInitializeRequest::Execute() {
     LOG_ERROR("Failed to create initialize result");
     return ERRNO_INTERNAL_ERROR;
   }
+  if (!m_pSession) {
+    LOG_ERROR("Session not available");
+    return ERRNO_INTERNAL_ERROR;
+  }
   spInitializeResult->requestId = m_spRequest->requestId;
   spInitializeResult->strProtocolVersion = PROTOCOL_VER;
-  spInitializeResult->capabilities =
-    CMCPSession::GetInstance().GetServerCapabilities();
-  spInitializeResult->implServerInfo =
-    CMCPSession::GetInstance().GetServerInfo();
+  spInitializeResult->capabilities = m_pSession->GetServerCapabilities();
+  spInitializeResult->implServerInfo = m_pSession->GetServerInfo();
   std::string strResponse;
   if (ERRNO_OK != spInitializeResult->Serialize(strResponse)) {
     LOG_ERROR("Failed to serialize initialize result");
     return ERRNO_INTERNAL_ERROR;
   }
-  auto spTransport = CMCPSession::GetInstance().GetTransport();
-  if (!spTransport) {
-    LOG_ERROR("Transport not available");
+  auto channel = m_pSession->GetChannel();
+  if (!channel) {
+    LOG_ERROR("Channel not available");
     return ERRNO_INTERNAL_ERROR;
   }
-  if (ERRNO_OK != spTransport->Write(strResponse)) {
+
+  auto now = std::chrono::system_clock::now();
+  auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+    now.time_since_epoch())
+                     .count();
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> dis(1000, 9999);
+  std::string sessionId =
+    "session-" + std::to_string(timestamp) + "-" + std::to_string(dis(gen));
+
+  m_pSession->SetSessionId(sessionId);
+  LOG_INFO("ProcessInitializeRequest Creat Session ID: {}", sessionId);
+  if (channel->SetAttribute(HEADER_SESSION_ID, sessionId) != ERRNO_OK) {
+    LOG_ERROR("Failed to set {}", HEADER_SESSION_ID);
+    return ERRNO_INTERNAL_ERROR;
+  }
+
+  if (channel->Write(strResponse) != ERRNO_OK) {
     LOG_ERROR("Failed to write initialize response");
     return ERRNO_INTERNAL_ERROR;
   }
@@ -176,17 +208,21 @@ int ProcessPingRequest::Execute() {
   }
   spPingResult->requestId = m_spRequest->requestId;
 
+  if (!m_pSession) {
+    LOG_ERROR("Session not available");
+    return ERRNO_INTERNAL_ERROR;
+  }
   std::string strResponse;
   if (ERRNO_OK != spPingResult->Serialize(strResponse)) {
     LOG_ERROR("Failed to serialize ping result");
     return ERRNO_INTERNAL_ERROR;
   }
-  auto spTransport = CMCPSession::GetInstance().GetTransport();
-  if (!spTransport) {
-    LOG_ERROR("Transport not available");
+  auto channel = m_pSession->GetChannel();
+  if (!channel) {
+    LOG_ERROR("Channel not available");
     return ERRNO_INTERNAL_ERROR;
   }
-  if (ERRNO_OK != spTransport->Write(strResponse)) {
+  if (ERRNO_OK != channel->Write(strResponse)) {
     LOG_ERROR("Failed to write ping response");
     return ERRNO_INTERNAL_ERROR;
   }
@@ -215,10 +251,15 @@ int ProcessListToolsRequest::Execute() {
     return ERRNO_INTERNAL_ERROR;
   }
 
+  if (!m_pSession) {
+    LOG_ERROR("Session not available");
+    return ERRNO_INTERNAL_ERROR;
+  }
+
   std::shared_ptr<ListToolsResult> spListToolsResult = nullptr;
   std::string strResponse;
 
-  bool bPagination = CMCPSession::GetInstance().GetServerToolsPagination();
+  bool bPagination = m_pSession->GetServerToolsPagination();
   if (bPagination) {
     if (!spListToolRequest->strCursor.empty()) {
       bool bValidCursor = true;
@@ -231,7 +272,7 @@ int ProcessListToolsRequest::Execute() {
         bValidCursor = false;
       }
 
-      auto vecServerTools = CMCPSession::GetInstance().GetServerTools();
+      auto vecServerTools = m_pSession->GetServerTools();
       if (bValidCursor) {
         if (nCursor >= vecServerTools.size()) {
           bValidCursor = false;
@@ -273,7 +314,7 @@ int ProcessListToolsRequest::Execute() {
         return ERRNO_INTERNAL_ERROR;
       }
       spListToolsResult->requestId = spListToolRequest->requestId;
-      auto vecServerTools = CMCPSession::GetInstance().GetServerTools();
+      auto vecServerTools = m_pSession->GetServerTools();
       spListToolsResult->vecTools.clear();
       if (vecServerTools.size() > 0)
         spListToolsResult->vecTools.push_back(vecServerTools[0]);
@@ -288,7 +329,7 @@ int ProcessListToolsRequest::Execute() {
       return ERRNO_INTERNAL_ERROR;
     }
     spListToolsResult->requestId = spListToolRequest->requestId;
-    spListToolsResult->vecTools = CMCPSession::GetInstance().GetServerTools();
+    spListToolsResult->vecTools = m_pSession->GetServerTools();
   }
 
   if (spListToolsResult) {
@@ -299,12 +340,12 @@ int ProcessListToolsRequest::Execute() {
   }
 
   if (!strResponse.empty()) {
-    auto spTransport = CMCPSession::GetInstance().GetTransport();
-    if (!spTransport) {
-      LOG_ERROR("Transport not available");
+    auto channel = m_pSession->GetChannel();
+    if (!channel) {
+      LOG_ERROR("Channel not available");
       return ERRNO_INTERNAL_ERROR;
     }
-    if (ERRNO_OK != spTransport->Write(strResponse)) {
+    if (ERRNO_OK != channel->Write(strResponse)) {
       LOG_ERROR("Failed to write list tools response");
       return ERRNO_INTERNAL_ERROR;
     }
@@ -346,6 +387,11 @@ int ProcessCallToolRequest::NotifyProgress(int iProgress, int iTotal) {
     return ERRNO_INTERNAL_ERROR;
   }
 
+  if (!m_pSession) {
+    LOG_ERROR("Session not available");
+    return ERRNO_INTERNAL_ERROR;
+  }
+
   if (m_spRequest->progressToken.IsValid()) {
     LOG_DEBUG("Notifying progress: {}/{}", iProgress, iTotal);
     MCP::ProgressNotification progressNotification(false);
@@ -359,12 +405,12 @@ int ProcessCallToolRequest::NotifyProgress(int iProgress, int iTotal) {
       LOG_ERROR("Failed to serialize progress notification");
       return ERRNO_INTERNAL_ERROR;
     }
-    auto spTransport = CMCPSession::GetInstance().GetTransport();
-    if (!spTransport) {
-      LOG_ERROR("Transport not available");
+    auto channel = m_pSession->GetChannel();
+    if (!channel) {
+      LOG_ERROR("Channel not available");
       return ERRNO_INTERNAL_ERROR;
     }
-    if (ERRNO_OK != spTransport->Write(strNotification)) {
+    if (ERRNO_OK != channel->Write(strNotification)) {
       LOG_ERROR("Failed to write progress notification");
       return ERRNO_INTERNAL_ERROR;
     }
@@ -382,6 +428,11 @@ int ProcessCallToolRequest::NotifyResult(
     return ERRNO_INTERNAL_ERROR;
   }
 
+  if (!m_pSession) {
+    LOG_ERROR("Session not available");
+    return ERRNO_INTERNAL_ERROR;
+  }
+
   LOG_INFO("Notifying call tool result");
 
   std::string strResponse;
@@ -389,16 +440,18 @@ int ProcessCallToolRequest::NotifyResult(
     LOG_ERROR("Failed to serialize call tool result");
     return ERRNO_INTERNAL_ERROR;
   }
-  auto spTransport = CMCPSession::GetInstance().GetTransport();
-  if (!spTransport) {
-    LOG_ERROR("Transport not available");
+  auto channel = m_pSession->GetChannel();
+  if (!channel) {
+    LOG_ERROR("Channel not available");
     return ERRNO_INTERNAL_ERROR;
   }
-  if (ERRNO_OK != spTransport->Write(strResponse)) {
+  if (ERRNO_OK != channel->Write(strResponse)) {
     LOG_ERROR("Failed to write call tool response");
     return ERRNO_INTERNAL_ERROR;
   }
 
   return ERRNO_OK;
 }
+
 }  // namespace MCP
+
