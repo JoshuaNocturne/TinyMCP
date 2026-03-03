@@ -16,12 +16,22 @@ MCP is an open protocol that standardizes how applications provide context to LL
 * Android
 * Other platforms that support standart c++...
 
+## How to build
+TinyMCP is built with CMake. You could build it with the following commands:
+```bash
+git clone --recurse-submodules https://github.com/JoshuaNocturne/TinyMCP.git
+cd TinyMCP && mkdir build && cd build
+cmake ..
+make
+```
+
 ## Usage Guide
 Please check the [wiki](https://github.com/Qihoo360/TinyMCP/wiki) for more information.
 
 ## Dependencies
 [jsoncpp](https://github.com/open-source-parsers/jsoncpp)
 [httplib](https://github.com/yhirose/cpp-httplib)
+[spdlog](https://github.com/gabime/spdlog)
 
 ## MCP protocol version
 [MCP Specification 2024-11-05](https://modelcontextprotocol.io/specification/2024-11-05/index)
