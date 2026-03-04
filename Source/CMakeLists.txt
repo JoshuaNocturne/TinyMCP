@@ -18,6 +18,9 @@ set(TARGET_NAME "tinymcp")
 option(BUILD_TINYMCP_SHARED "Build tinymcp as shared library" ON)
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+
+find_package(Threads REQUIRED)
 
 set(ALL_SRC_FILES "")
 file(GLOB_RECURSE PROTOCOL_SRC_FILES "./Protocol/*/*.cpp")
@@ -35,5 +38,5 @@ target_include_directories(${TARGET_NAME} PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/External/spdlog/include>
 )
 
-target_link_libraries(${TARGET_NAME} PUBLIC jsoncpp_static)
+target_link_libraries(${TARGET_NAME} PUBLIC jsoncpp_static Threads::Threads)
 
